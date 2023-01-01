@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fpdart/fpdart.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:reddit_clone/core/constants/constants.dart';
 import 'package:reddit_clone/core/constants/firebase_constants.dart';
+import 'package:reddit_clone/core/failure.dart';
 import 'package:reddit_clone/core/providers/firebase_providers.dart';
+import 'package:reddit_clone/core/type_defs.dart';
 import 'package:reddit_clone/features/auth/models/user_model.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>(
@@ -31,7 +34,7 @@ class AuthRepository {
   CollectionReference get _users =>
       _firestore.collection(FirebaseConstants.usersCollection);
 
-  Future<UserModel> signInWithGoogle() async {
+  FutureEither<UserModel> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       final googleAuth = await googleUser?.authentication;
@@ -42,7 +45,7 @@ class AuthRepository {
       UserCredential userCredential =
           await _auth.signInWithCredential(credential);
 
-      late UserModel userModel;
+      UserModel userModel;
 
       if (userCredential.additionalUserInfo!.isNewUser) {
         userModel = UserModel(
@@ -55,10 +58,22 @@ class AuthRepository {
           awards: [],
         );
         await _users.doc(userCredential.user!.uid).set(userModel.toJson());
+      } else {
+        userModel = await getUserData(userCredential.user!.uid).first;
       }
-      return userModel;
+      // right -> Success
+      return right(userModel);
+    } on FirebaseException catch (error) {
+      throw error.message!;
     } catch (error) {
-      rethrow;
+      // left -> Error
+      return left(Failure(error.toString()));
     }
+  }
+
+  Stream<UserModel> getUserData(String uid) {
+    return _users.doc(uid).snapshots().map(
+          (event) => UserModel.fromJson(event.data() as Map<String, dynamic>),
+        );
   }
 }

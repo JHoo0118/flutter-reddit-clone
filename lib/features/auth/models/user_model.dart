@@ -4,6 +4,7 @@ part 'user_model.g.dart';
 
 @JsonSerializable()
 class UserModel {
+  @JsonKey()
   final String name;
   final String profilePic;
   final String banner;
